@@ -1,7 +1,6 @@
 #!/usr/bin/env osascript -l JavaScript
-// wallpaper-switch.js
-// Switches Tahoe Morning/Day/Evening/Night based on solar position.
-// Only updates wallpaper or dark mode when a change is actually needed — no blinks.
+// wallpaper-switch.js — Tahoe wallpaper switcher based on solar position
+// Only updates wallpaper / dark mode when a change is actually needed.
 
 ObjC.import('Foundation');
 
@@ -9,133 +8,42 @@ function run() {
   const app = Application.currentApplication();
   app.includeStandardAdditions = true;
 
+  // ── Config: set your coordinates here ─────────────────────────────────────
+  const LAT = 50.2649;  // Katowice, Poland  ← change to your latitude
+  const LON = 19.0238;  //                   ← change to your longitude
+
   // ── Paths ──────────────────────────────────────────────────────────────────
   const home     = ObjC.unwrap($.NSHomeDirectory());
-  const CONFIG   = home + "/Library/Scripts/wallpaper-switch-config.json";
   const PLIST    = home + "/Library/Application Support/com.apple.wallpaper/Store/Index.plist";
   const MANIFEST = home + "/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json";
 
-  // ── Location ───────────────────────────────────────────────────────────────
-  // Reads config written by install.sh.
-  // Falls back to Katowice defaults if the config file is missing.
-  function loadConfig() {
-    const data = $.NSData.dataWithContentsOfFile($(CONFIG));
-    if (data.isNil()) return { useLocationServices: false, lat: 50.2649, lon: 19.0238 };
-    const str = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
-    try { return JSON.parse(str); }
-    catch(e) { return { useLocationServices: false, lat: 50.2649, lon: 19.0238 }; }
-  }
-
-  // Persist updated coordinates (e.g. after travel detection)
-  function saveConfig(cfg) {
-    try {
-      const data = $(JSON.stringify(cfg, null, 2) + '\n').dataUsingEncoding($.NSUTF8StringEncoding);
-      data.writeToFileAtomically($(CONFIG), true);
-    } catch(e) {}
-  }
-
-  // Haversine distance in km — detects when user has traveled far enough
-  function haversineKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
-  // Fetch current location from IP geolocation (no permissions required).
-  // Tries ipinfo.io → ipapi.co in order; falls back to cached coords on failure.
-  function getLocationFromIPGeo() {
-    var apis = [
-      // ipinfo.io: {"loc":"lat,lon", "city":"...", "country":"CC"}  50k/month free
-      { url: 'https://ipinfo.io/json',
-        parse: function(d) {
-          if (!d.loc || d.bogon) return null;
-          var p = d.loc.split(',');
-          var lat = parseFloat(p[0]), lon = parseFloat(p[1]);
-          return (!isNaN(lat) && !isNaN(lon)) ? {lat: lat, lon: lon} : null;
-        }
-      },
-      // ipapi.co: {"latitude":N, "longitude":N}  1k/day free — fallback
-      { url: 'https://ipapi.co/json/',
-        parse: function(d) {
-          if (d.error || typeof d.latitude !== 'number') return null;
-          return {lat: d.latitude, lon: d.longitude};
-        }
-      }
-    ];
-    for (var i = 0; i < apis.length; i++) {
-      try {
-        var json = app.doShellScript(
-          "/usr/bin/curl -sSL --max-time 3 '" + apis[i].url + "'"
-        );
-        var result = apis[i].parse(JSON.parse(json));
-        if (result) return result;
-      } catch(e) {}
-    }
-    return null;
-  }
-
-  const config = loadConfig();
-  let LAT = config.lat;
-  let LON = config.lon;
-  let locationUpdated = false;
-
-  if (config.useLocationServices) {
-    const loc = getLocationFromIPGeo();
-    if (loc) {
-      const dist = haversineKm(config.lat, config.lon, loc.lat, loc.lon);
-      if (dist > 50) {
-        // User traveled — update cached coordinates so next run is instant
-        config.lat = loc.lat;
-        config.lon = loc.lon;
-        saveConfig(config);
-        locationUpdated = true;
-      }
-      LAT = loc.lat;
-      LON = loc.lon;
-    }
-    // If IP geo is unavailable (offline / rate-limited), fall back to cached coordinates from config
-  }
-
-  // ── Read Tahoe IDs from Apple's manifest (stays correct after re-downloads) ─
+  // ── Read Tahoe IDs from Apple's manifest (no hardcoded values) ─────────────
   function loadTahoeIDs() {
-    const data = $.NSData.dataWithContentsOfFile($(MANIFEST));
-    if (data.isNil()) return null;
-
-    const json = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
-    const assets = JSON.parse(json).assets || [];
-
-    const map = { morning: null, day: null, evening: null, night: null };
-    const keys = {
-      "Tahoe Morning": "morning",
-      "Tahoe Day":     "day",
-      "Tahoe Evening": "evening",
-      "Tahoe Night":   "night",
-    };
-    for (const a of assets) {
-      const period = keys[a.accessibilityLabel];
-      if (period) map[period] = a.id;
-    }
-    return map;
+    try {
+      const raw = app.doShellScript(
+        "python3 -c \"import json; d=json.load(open('" + MANIFEST + "')); " +
+        "print(' '.join(a['id'] for n in ['Tahoe Morning','Tahoe Day','Tahoe Evening','Tahoe Night'] " +
+        "for a in d['assets'] if a.get('accessibilityLabel')==n))\""
+      );
+      const parts = raw.trim().split(' ');
+      if (parts.length !== 4) return null;
+      return { morning: parts[0], day: parts[1], evening: parts[2], night: parts[3] };
+    } catch(e) { return null; }
   }
 
   const IDS = loadTahoeIDs();
-  if (!IDS || Object.values(IDS).some(v => !v)) {
-    return "ERROR: Could not find Tahoe wallpaper IDs in manifest.\nMake sure all 4 wallpapers are downloaded in System Settings → Wallpaper.";
+  if (!IDS) {
+    return "ERROR: Could not read Tahoe IDs from manifest.\n" +
+           "Make sure all 4 wallpapers are downloaded in System Settings → Wallpaper.";
   }
 
-  // ── Solar calculation (pure JS Math — no python needed here) ───────────────
-  const now = new Date();
-  const N   = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
-
-  const toRad = d => d * Math.PI / 180;
-  const B     = toRad(360 / 365.0 * (N - 81));
-  const decl  = toRad(23.45 * Math.sin(B));
-  const latR  = toRad(LAT);
-
+  // ── Solar calculation (pure JS — no network, no python) ───────────────────
+  const now    = new Date();
+  const N      = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const toRad  = d => d * Math.PI / 180;
+  const B      = toRad(360 / 365.0 * (N - 81));
+  const decl   = toRad(23.45 * Math.sin(B));
+  const latR   = toRad(LAT);
   const cosHA  = (Math.sin(toRad(-0.8333)) - Math.sin(latR) * Math.sin(decl))
                / (Math.cos(latR) * Math.cos(decl));
   const ha     = Math.acos(Math.max(-1, Math.min(1, cosHA))) * 180 / Math.PI / 15.0;
@@ -145,7 +53,6 @@ function run() {
   const sunset  = 12.0 - LON / 15.0 - eot + ha + tz;
 
   const h = now.getHours() + now.getMinutes() / 60.0;
-
   let period;
   if      (h < sunrise)          period = "night";
   else if (h < sunrise + 1.5)    period = "morning";
@@ -156,60 +63,33 @@ function run() {
   const wantDark  = (period === "evening" || period === "night");
   const desiredID = IDS[period];
 
-  // ── Read current assetID directly via ObjC (no shell) ─────────────────────
+  // ── Read current assetID via Python ────────────────────────────────────────
   function getCurrentAssetID() {
-    const data = $.NSData.dataWithContentsOfFile($(PLIST));
-    if (data.isNil()) return null;
-
-    const plist = $.NSPropertyListSerialization
-      .propertyListWithDataOptionsFormatError(data, 0, null, null);
-    if (plist.isNil()) return null;
-
-    // Traverse the NSDictionary tree looking for aerials Choice with Configuration
-    function find(obj) {
-      if (obj.isNil && obj.isNil()) return null;
-
-      if (obj.isKindOfClass($.NSDictionary)) {
-        const choices = obj.objectForKey('Choices');
-        if (!choices.isNil()) {
-          const count = ObjC.unwrap(choices.count);
-          for (let i = 0; i < count; i++) {
-            const c = choices.objectAtIndex(i);
-            if (!c.isNil() &&
-                ObjC.unwrap(c.objectForKey('Provider')) === 'com.apple.wallpaper.choice.aerials') {
-              const cfgData = c.objectForKey('Configuration');
-              if (!cfgData.isNil() && ObjC.unwrap(cfgData.length) > 0) {
-                const cfg = $.NSPropertyListSerialization
-                  .propertyListWithDataOptionsFormatError(cfgData, 0, null, null);
-                if (!cfg.isNil()) {
-                  const assetID = cfg.objectForKey('assetID');
-                  if (!assetID.isNil()) return ObjC.unwrap(assetID);
-                }
-              }
-            }
-          }
-        }
-        // Recurse into all values
-        const keys = obj.allKeys;
-        const kCount = ObjC.unwrap(keys.count);
-        for (let i = 0; i < kCount; i++) {
-          const r = find(obj.objectForKey(keys.objectAtIndex(i)));
-          if (r) return r;
-        }
-      } else if (obj.isKindOfClass($.NSArray)) {
-        const count = ObjC.unwrap(obj.count);
-        for (let i = 0; i < count; i++) {
-          const r = find(obj.objectAtIndex(i));
-          if (r) return r;
-        }
-      }
-      return null;
-    }
-
-    return find(plist);
+    const py = [
+      "import plistlib,subprocess",
+      "r=subprocess.run(['plutil','-convert','xml1','-o','-','" + PLIST + "'],capture_output=True)",
+      "d=plistlib.loads(r.stdout)",
+      "def f(x):",
+      "  if isinstance(x,dict):",
+      "    for c in x.get('Choices',[]):",
+      "      if isinstance(c,dict) and c.get('Provider')=='com.apple.wallpaper.choice.aerials' and c.get('Configuration'):",
+      "        return plistlib.loads(c['Configuration']).get('assetID','')",
+      "    for v in x.values():",
+      "      r=f(v)",
+      "      if r:return r",
+      "  elif isinstance(x,list):",
+      "    for v in x:",
+      "      r=f(v)",
+      "      if r:return r",
+      "  return ''",
+      "print(f(d))",
+    ].join("\n");
+    $(py).writeToFileAtomicallyEncodingError("/tmp/wp_read.py", true, $.NSUTF8StringEncoding, null);
+    try { return app.doShellScript("python3 /tmp/wp_read.py").trim() || null; }
+    catch(e) { return null; }
   }
 
-  // ── Update plist via Python helper written to /tmp ─────────────────────────
+  // ── Update plist + restart agent via Python ────────────────────────────────
   function updatePlist(newID) {
     const py = [
       "import sys,plistlib,subprocess,os",
@@ -219,29 +99,24 @@ function run() {
       "c=plistlib.dumps({'assetID':i},fmt=plistlib.FMT_BINARY)",
       "def u(x):",
       "  if isinstance(x,dict):",
-      "    [x.__setitem__('Configuration',c) for ch in x.get('Choices',[]) if isinstance(ch,dict) and ch.get('Provider')=='com.apple.wallpaper.choice.aerials']",
-      "    [u(v) for v in x.values()]",
-      "  elif isinstance(x,list):[u(v) for v in x]",
+      "    for ch in x.get('Choices',[]):",
+      "      if isinstance(ch,dict) and ch.get('Provider')=='com.apple.wallpaper.choice.aerials':",
+      "        ch['Configuration']=c",
+      "    for v in x.values():u(v)",
+      "  elif isinstance(x,list):",
+      "    for v in x:u(v)",
       "u(d)",
       "t=p+'.tmp'",
       "open(t,'wb').write(plistlib.dumps(d,fmt=plistlib.FMT_BINARY))",
       "os.replace(t,p)",
     ].join("\n");
-
-    $(py).writeToFileAtomicallyEncodingError(
-      "/tmp/wp_update.py", true, $.NSUTF8StringEncoding, null);
-
-    app.doShellScript(`python3 /tmp/wp_update.py '${PLIST}' '${newID}'`);
-
-    // Restart wallpaper agent
-    try {
-      app.doShellScript("launchctl kickstart -k \"gui/$(id -u)/com.apple.wallpaper.agent\"");
-    } catch(e) {
-      try { app.doShellScript("killall WallpaperAgent"); } catch(_) {}
-    }
+    $(py).writeToFileAtomicallyEncodingError("/tmp/wp_update.py", true, $.NSUTF8StringEncoding, null);
+    app.doShellScript("python3 /tmp/wp_update.py '" + PLIST + "' '" + newID + "'");
+    // launchctl kickstart is blocked by SIP — killall is the only working method
+    try { app.doShellScript("killall WallpaperAgent"); } catch(_) {}
   }
 
-  // ── Apply changes only if needed (fixes the blink bug) ────────────────────
+  // ── Apply only if something actually changed ───────────────────────────────
   const currentID = getCurrentAssetID();
   const wallpaperChanged = currentID !== desiredID;
   if (wallpaperChanged) updatePlist(desiredID);
@@ -251,42 +126,15 @@ function run() {
   const darkChanged = wantDark !== currentDark;
   if (darkChanged) sysEvents.appearancePreferences.darkMode = wantDark;
 
-  // ── Log: only on change, rotate daily ─────────────────────────────────────
-  const LOG = "/tmp/wallpaper-switch.log";
-
-  // Delete log file if it is older than 24 h (keeps /tmp clean forever)
-  try {
-    app.doShellScript(
-      `find '${LOG}' -maxdepth 0 -mtime +0 -delete 2>/dev/null; true`
-    );
-  } catch(_) {}
-
-  // Write only when something actually changed
-  if (wallpaperChanged || darkChanged || locationUpdated) {
+  // ── Log (only on change) ───────────────────────────────────────────────────
+  if (wallpaperChanged || darkChanged) {
     const pad = n => String(n).padStart(2, '0');
-    const dt  = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    const hh  = pad(now.getHours());
-    const mm  = pad(now.getMinutes());
-    const sr  = `${Math.floor(sunrise)}:${pad(Math.round((sunrise % 1) * 60))}`;
-    const ss  = `${Math.floor(sunset)}:${pad(Math.round((sunset  % 1) * 60))}`;
-
+    const hh  = pad(now.getHours()), mm = pad(now.getMinutes());
+    const sr  = `${Math.floor(sunrise)}:${pad(Math.round((sunrise%1)*60))}`;
+    const ss  = `${Math.floor(sunset)}:${pad(Math.round((sunset%1)*60))}`;
     const changes = [];
-    if (wallpaperChanged)  changes.push(`wallpaper→${period}`);
-    if (darkChanged)       changes.push(`dark→${wantDark}`);
-    if (locationUpdated)   changes.push(`location→${LAT.toFixed(4)},${LON.toFixed(4)}`);
-
-    const line =
-      `[${dt} ${hh}:${mm}] ${period} | sunrise=${sr} sunset=${ss} | ${changes.join(', ')}\n`;
-
-    const data = $(line).dataUsingEncoding($.NSUTF8StringEncoding);
-    const fh   = $.NSFileHandle.fileHandleForWritingAtPath($(LOG));
-    if (!fh.isNil()) {
-      fh.seekToEndOfFile;
-      fh.writeData(data);
-      fh.closeFile;
-    } else {
-      $.NSFileManager.defaultManager
-        .createFileAtPathContentsAttributes($(LOG), data, null);
-    }
+    if (wallpaperChanged) changes.push(`wallpaper→${period}`);
+    if (darkChanged)      changes.push(`dark→${wantDark}`);
+    return `${hh}:${mm} | ${period} | ${sr}↑ ${ss}↓ | ${changes.join(' ')}`;
   }
 }
