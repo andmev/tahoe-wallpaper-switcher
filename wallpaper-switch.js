@@ -45,19 +45,23 @@ function run() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Query macOS Location Services for the last known GPS fix (no delegate needed)
-  function getLocationFromCoreLocation() {
-    ObjC.import('CoreLocation');
+  // Fetch current location from IP geolocation (no permissions required).
+  // Uses ipinfo.io (50k req/month free — safe at 96 runs/day).
+  // Falls back silently to cached config coords when offline or rate-limited.
+  function getLocationFromIPGeo() {
     try {
-      if (!$.CLLocationManager.locationServicesEnabled) return null;
-      const status = $.CLLocationManager.authorizationStatus;
-      if (status === 1 || status === 2) return null;   // restricted or denied
-      const mgr = $.CLLocationManager.alloc.init;
-      const loc = mgr.location;
-      if (!loc || loc.isNil()) return null;
-      const c = loc.coordinate;
-      if (Math.abs(c.latitude) < 0.001 && Math.abs(c.longitude) < 0.001) return null;
-      return { lat: c.latitude, lon: c.longitude };
+      const json = app.doShellScript(
+        "/usr/bin/curl -fsSL --max-time 3 'https://ipinfo.io/json'"
+      );
+      const d = JSON.parse(json);
+      // bogon = true means a private/reserved IP (no real geo)
+      if (!d.loc || d.bogon) return null;
+      const parts = d.loc.split(',');
+      if (parts.length !== 2) return null;
+      const lat = parseFloat(parts[0]);
+      const lon = parseFloat(parts[1]);
+      if (isNaN(lat) || isNaN(lon)) return null;
+      return { lat, lon };
     } catch(e) { return null; }
   }
 
@@ -67,7 +71,7 @@ function run() {
   let locationUpdated = false;
 
   if (config.useLocationServices) {
-    const loc = getLocationFromCoreLocation();
+    const loc = getLocationFromIPGeo();
     if (loc) {
       const dist = haversineKm(config.lat, config.lon, loc.lat, loc.lon);
       if (dist > 50) {
@@ -80,7 +84,7 @@ function run() {
       LAT = loc.lat;
       LON = loc.lon;
     }
-    // If CoreLocation is unavailable, fall back to cached coordinates from config
+    // If IP geo is unavailable (offline / rate-limited), fall back to cached coordinates from config
   }
 
   // ── Read Tahoe IDs from Apple's manifest (stays correct after re-downloads) ─

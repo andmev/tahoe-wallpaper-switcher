@@ -74,44 +74,22 @@ echo ""
 echo "  Sunrise/sunset times are calculated from your coordinates."
 echo "  Choose how the script should determine your location:"
 echo ""
-echo "  [1] Location Services  (recommended)"
-echo "      macOS detects your GPS position automatically."
-echo "      If you travel (e.g. San Francisco → London), the wallpaper"
-echo "      schedule adapts to your new timezone on the next run."
+echo "  [1] Auto-detect  (recommended)"
+echo "      Your city is resolved from your IP address — no permissions"
+echo "      needed, works on first run. If you travel (San Francisco →"
+echo "      London), the schedule adapts automatically on the next run."
 echo ""
 echo "  [2] Manual coordinates"
-echo "      Enter latitude/longitude once. Won't change automatically"
-echo "      if you travel — update the config file manually."
+echo "      Enter latitude/longitude once. Update the config file"
+echo "      manually if you move."
 echo ""
 read -p "  Your choice [1/2]: " loc_choice
 echo ""
 
-# Helper: call CoreLocation via a JXA one-liner, returns JSON
-try_corelocation() {
-    osascript -l JavaScript << 'JXAEOF'
-ObjC.import('CoreLocation');
-ObjC.import('Foundation');
-(function() {
-    try {
-        if (!$.CLLocationManager.locationServicesEnabled) {
-            return JSON.stringify({error: 'disabled'});
-        }
-        var status = $.CLLocationManager.authorizationStatus;
-        if (status === 2) return JSON.stringify({error: 'denied'});
-        if (status === 1) return JSON.stringify({error: 'restricted'});
-        var mgr = $.CLLocationManager.alloc.init;
-        var loc = mgr.location;
-        if (!loc || loc.isNil()) return JSON.stringify({error: 'not_available'});
-        var c = loc.coordinate;
-        if (Math.abs(c.latitude) < 0.001 && Math.abs(c.longitude) < 0.001) {
-            return JSON.stringify({error: 'invalid'});
-        }
-        return JSON.stringify({lat: c.latitude, lon: c.longitude});
-    } catch(e) {
-        return JSON.stringify({error: String(e)});
-    }
-})()
-JXAEOF
+# Helper: resolve location from IP address (no permissions required)
+get_ip_location() {
+    curl -fsSL --max-time 5 "https://ipapi.co/json/" 2>/dev/null \
+        || echo '{"error":"no_internet"}'
 }
 
 # Helper: extract one field from a JSON string via Python (always exits 0)
@@ -132,65 +110,29 @@ FINAL_LAT=""
 FINAL_LON=""
 
 if [[ "$loc_choice" == "1" ]]; then
-    echo "  Contacting macOS Location Services..."
-    LOC_JSON=$(try_corelocation 2>/dev/null || echo '{"error":"script_failed"}')
-    LOC_LAT=$(echo "$LOC_JSON" | json_field lat)
-    LOC_LON=$(echo "$LOC_JSON" | json_field lon)
-    LOC_ERR=$(echo "$LOC_JSON" | json_field error)
+    echo "  Detecting your location..."
+    LOC_JSON=$(get_ip_location)
+    LOC_LAT=$(echo "$LOC_JSON" | json_field latitude)
+    LOC_LON=$(echo "$LOC_JSON" | json_field longitude)
+    LOC_CITY=$(echo "$LOC_JSON" | json_field city)
+    LOC_COUNTRY=$(echo "$LOC_JSON" | json_field country_name)
 
     if [ -n "$LOC_LAT" ] && [ -n "$LOC_LON" ]; then
-        echo "  ✓ Location detected: $LOC_LAT, $LOC_LON"
+        echo "  ✓ Detected: $LOC_CITY, $LOC_COUNTRY  ($LOC_LAT, $LOC_LON)"
         USE_LOCATION_SERVICES="true"
         FINAL_LAT="$LOC_LAT"
         FINAL_LON="$LOC_LON"
     else
         echo ""
-        case "$LOC_ERR" in
-            disabled)
-                echo "  ⚠️  Location Services are disabled system-wide."
-                echo "      Enable: System Settings → Privacy & Security → Location Services"
-                ;;
-            denied)
-                echo "  ⚠️  Terminal does not have location access."
-                echo "      Fix:    System Settings → Privacy & Security → Location Services"
-                echo "              → enable your terminal app (Terminal / iTerm2 / etc.)"
-                ;;
-            restricted)
-                echo "  ⚠️  Location access is restricted on this device."
-                ;;
-            not_available|invalid)
-                echo "  ⚠️  No location fix cached yet."
-                echo "      Tip: open Maps or Weather once so macOS caches a location, then retry."
-                ;;
-            *)
-                echo "  ⚠️  Location unavailable: $LOC_ERR"
-                ;;
-        esac
-        echo ""
-        read -p "  Retry? [y/N] " retry_yn
-        if [[ "$retry_yn" =~ ^[Yy]$ ]]; then
-            echo ""
-            echo "  Retrying..."
-            LOC_JSON=$(try_corelocation 2>/dev/null || echo '{"error":"script_failed"}')
-            LOC_LAT=$(echo "$LOC_JSON" | json_field lat)
-            LOC_LON=$(echo "$LOC_JSON" | json_field lon)
-            if [ -n "$LOC_LAT" ] && [ -n "$LOC_LON" ]; then
-                echo "  ✓ Location detected: $LOC_LAT, $LOC_LON"
-                USE_LOCATION_SERVICES="true"
-                FINAL_LAT="$LOC_LAT"
-                FINAL_LON="$LOC_LON"
-            fi
-        fi
-        if [ -z "$FINAL_LAT" ]; then
-            echo ""
-            echo "  Falling back to manual coordinates."
-        fi
+        echo "  ⚠️  Could not detect location (no internet or service unavailable)."
+        echo "      Falling back to manual coordinates."
     fi
 fi
 
-# Manual entry — chosen directly or as fallback after failed Location Services
+# Manual entry — chosen directly or as fallback
 if [ -z "$FINAL_LAT" ] || [ -z "$FINAL_LON" ]; then
-    echo "  Enter your coordinates (look up yours at https://www.latlong.net)"
+    echo "  Enter your coordinates:"
+    echo "  (Look up yours at https://www.latlong.net )"
     echo ""
     read -p "  Latitude  (e.g.  50.2649 for Katowice): " FINAL_LAT
     read -p "  Longitude (e.g.  19.0238 for Katowice): " FINAL_LON

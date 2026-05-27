@@ -49,14 +49,13 @@ Wallpaper and dark mode are updated **only when the period actually changes** �
 
 During installation you choose how the script determines your location:
 
-### Option 1 — Location Services (recommended)
+### Option 1 — Auto-detect (recommended)
 
-macOS detects your GPS position automatically.
-To enable it, grant Terminal (or your terminal app) access in:
+Your city is resolved from your **IP address** — no permissions or system settings required, works on the very first run.
 
-> **System Settings → Privacy & Security → Location Services**
+The script re-checks your position on every run (every 15 min). If you travel further than 50 km — say, fly from San Francisco to London — the schedule automatically recalibrates to the new timezone and solar position.
 
-The script re-checks your position every 15 minutes. If you travel further than **50 km** (e.g. San Francisco → London), coordinates are updated automatically and the wallpaper schedule adapts to your new location — no manual action needed.
+> Works anywhere. The only case where it won't give your real location is if you are on a VPN that exits in another country — use manual coordinates then.
 
 ### Option 2 — Manual coordinates
 
