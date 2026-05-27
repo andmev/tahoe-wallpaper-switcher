@@ -46,23 +46,36 @@ function run() {
   }
 
   // Fetch current location from IP geolocation (no permissions required).
-  // Uses ipinfo.io (50k req/month free — safe at 96 runs/day).
-  // Falls back silently to cached config coords when offline or rate-limited.
+  // Tries ipinfo.io → ipapi.co in order; falls back to cached coords on failure.
   function getLocationFromIPGeo() {
-    try {
-      const json = app.doShellScript(
-        "/usr/bin/curl -fsSL --max-time 3 'https://ipinfo.io/json'"
-      );
-      const d = JSON.parse(json);
-      // bogon = true means a private/reserved IP (no real geo)
-      if (!d.loc || d.bogon) return null;
-      const parts = d.loc.split(',');
-      if (parts.length !== 2) return null;
-      const lat = parseFloat(parts[0]);
-      const lon = parseFloat(parts[1]);
-      if (isNaN(lat) || isNaN(lon)) return null;
-      return { lat, lon };
-    } catch(e) { return null; }
+    var apis = [
+      // ipinfo.io: {"loc":"lat,lon", "city":"...", "country":"CC"}  50k/month free
+      { url: 'https://ipinfo.io/json',
+        parse: function(d) {
+          if (!d.loc || d.bogon) return null;
+          var p = d.loc.split(',');
+          var lat = parseFloat(p[0]), lon = parseFloat(p[1]);
+          return (!isNaN(lat) && !isNaN(lon)) ? {lat: lat, lon: lon} : null;
+        }
+      },
+      // ipapi.co: {"latitude":N, "longitude":N}  1k/day free — fallback
+      { url: 'https://ipapi.co/json/',
+        parse: function(d) {
+          if (d.error || typeof d.latitude !== 'number') return null;
+          return {lat: d.latitude, lon: d.longitude};
+        }
+      }
+    ];
+    for (var i = 0; i < apis.length; i++) {
+      try {
+        var json = app.doShellScript(
+          "/usr/bin/curl -sSL --max-time 3 '" + apis[i].url + "'"
+        );
+        var result = apis[i].parse(JSON.parse(json));
+        if (result) return result;
+      } catch(e) {}
+    }
+    return null;
   }
 
   const config = loadConfig();

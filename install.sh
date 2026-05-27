@@ -86,10 +86,52 @@ echo ""
 read -p "  Your choice [1/2]: " loc_choice
 echo ""
 
-# Helper: resolve location from IP address (no permissions required)
+# Helper: resolve location from IP — tries three providers, stops at first success
 get_ip_location() {
-    curl -fsSL --max-time 5 "https://ipapi.co/json/" 2>/dev/null \
-        || echo '{"error":"no_internet"}'
+    local TMP result
+    TMP=$(mktemp /tmp/tahoe_geo.XXXXXX) || { echo '{"error":"mktemp"}'; return; }
+    result=''
+
+    # 1. ipinfo.io  → {"loc":"lat,lon","city":"...","country":"CC"}  (50k/month free)
+    if [ -z "$result" ] && curl -sSL --max-time 5 "https://ipinfo.io/json" -o "$TMP" 2>/dev/null; then
+        result=$(python3 -c "
+import json
+try:
+    d=json.load(open('$TMP'))
+    loc=d.get('loc','')
+    if ',' in loc and not d.get('bogon'):
+        a,b=loc.split(',',1)
+        print(json.dumps({'latitude':float(a),'longitude':float(b),'city':d.get('city',''),'country_name':d.get('country','')}))
+except: pass
+" 2>/dev/null || true)
+    fi
+
+    # 2. ipapi.co   → {"latitude":N,"longitude":N,"city":"...","country_name":"..."}  (1k/day free)
+    if [ -z "$result" ] && curl -sSL --max-time 5 "https://ipapi.co/json/" -o "$TMP" 2>/dev/null; then
+        result=$(python3 -c "
+import json
+try:
+    d=json.load(open('$TMP'))
+    if not d.get('error') and 'latitude' in d:
+        print(json.dumps({'latitude':float(d['latitude']),'longitude':float(d['longitude']),'city':d.get('city',''),'country_name':d.get('country_name','')}))
+except: pass
+" 2>/dev/null || true)
+    fi
+
+    # 3. ip-api.com → {"lat":N,"lon":N,"city":"...","country":"..."}  (45 req/min, free)
+    if [ -z "$result" ] && curl -sSL --max-time 5 "http://ip-api.com/json?fields=lat,lon,city,country" -o "$TMP" 2>/dev/null; then
+        result=$(python3 -c "
+import json
+try:
+    d=json.load(open('$TMP'))
+    if d.get('lat') and d.get('lon'):
+        print(json.dumps({'latitude':float(d['lat']),'longitude':float(d['lon']),'city':d.get('city',''),'country_name':d.get('country','')}))
+except: pass
+" 2>/dev/null || true)
+    fi
+
+    rm -f "$TMP"
+    if [ -n "$result" ]; then echo "$result"; else echo '{"error":"no_internet"}'; fi
 }
 
 # Helper: extract one field from a JSON string via Python (always exits 0)
