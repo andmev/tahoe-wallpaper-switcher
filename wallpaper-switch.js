@@ -1,5 +1,6 @@
 #!/usr/bin/env osascript -l JavaScript
 // wallpaper-switch.js — Tahoe wallpaper switcher based on solar position
+// Detects location via IP geolocation → adapts to VPN / travel automatically.
 // Only updates wallpaper / dark mode when a change is actually needed.
 
 ObjC.import('Foundation');
@@ -8,14 +9,93 @@ function run() {
   const app = Application.currentApplication();
   app.includeStandardAdditions = true;
 
-  // ── Config: set your coordinates here ─────────────────────────────────────
-  const LAT = 50.2649;  // Katowice, Poland  ← change to your latitude
-  const LON = 19.0238;  //                   ← change to your longitude
-
   // ── Paths ──────────────────────────────────────────────────────────────────
   const home     = ObjC.unwrap($.NSHomeDirectory());
+  const CONFIG   = home + "/Library/Scripts/wallpaper-switch-config.json";
   const PLIST    = home + "/Library/Application Support/com.apple.wallpaper/Store/Index.plist";
   const MANIFEST = home + "/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json";
+
+  // ── Config (lat/lon cache + useLocationServices flag) ─────────────────────
+  function readConfig() {
+    try {
+      const data = $.NSData.dataWithContentsOfFile($(CONFIG));
+      if (data.isNil()) return null;
+      const str = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+      return JSON.parse(str);
+    } catch(e) { return null; }
+  }
+
+  function writeConfig(cfg) {
+    try {
+      const str = JSON.stringify(cfg, null, 2) + '\n';
+      $(str).writeToFileAtomicallyEncodingError($(CONFIG), true, $.NSUTF8StringEncoding, null);
+    } catch(e) {}
+  }
+
+  // ── IP Geolocation (ipinfo.io → ipapi.co fallback) ────────────────────────
+  function getLocationFromIP() {
+    const apis = [
+      { url: 'https://ipinfo.io/json',
+        parse: d => {
+          if (!d.loc || d.bogon) return null;
+          const [lat, lon] = d.loc.split(',').map(Number);
+          return isNaN(lat) ? null : { lat, lon, city: d.city, country: d.country };
+        }
+      },
+      { url: 'https://ipapi.co/json/',
+        parse: d => {
+          if (d.error || typeof d.latitude !== 'number') return null;
+          return { lat: d.latitude, lon: d.longitude, city: d.city, country: d.country_code };
+        }
+      },
+    ];
+    for (const api of apis) {
+      try {
+        const json = app.doShellScript(
+          `/usr/bin/curl -sSL --max-time 4 '${api.url}'`
+        );
+        const result = api.parse(JSON.parse(json));
+        if (result) return result;
+      } catch(e) {}
+    }
+    return null;
+  }
+
+  // Haversine distance in km
+  function distKm(lat1, lon1, lat2, lon2) {
+    const R = 6371, toR = d => d * Math.PI / 180;
+    const dLat = toR(lat2 - lat1), dLon = toR(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 +
+              Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // ── Resolve current coordinates ────────────────────────────────────────────
+  // Default fallback (used when config missing or IP geo fails)
+  const DEFAULTS = { lat: 50.2649, lon: 19.0238 };  // Katowice, Poland
+
+  let cfg = readConfig() || { ...DEFAULTS, useLocationServices: true };
+  let LAT = cfg.lat, LON = cfg.lon;
+  let locLabel = cfg.city ? `${cfg.city}` : `${LAT.toFixed(2)},${LON.toFixed(2)}`;
+
+  if (cfg.useLocationServices !== false) {
+    const loc = getLocationFromIP();
+    if (loc) {
+      const dist = distKm(cfg.lat, cfg.lon, loc.lat, loc.lon);
+      LAT = loc.lat;
+      LON = loc.lon;
+      locLabel = loc.city ? `${loc.city}, ${loc.country}` : `${LAT.toFixed(2)},${LON.toFixed(2)}`;
+      // Cache new location if moved more than 50 km
+      if (dist > 50) {
+        cfg.lat = loc.lat;
+        cfg.lon = loc.lon;
+        cfg.city = loc.city;
+        cfg.country = loc.country;
+        writeConfig(cfg);
+      }
+    }
+    // If IP geo fails (offline/rate-limited) → fall back to cached coords silently
+  }
 
   // ── Read Tahoe IDs from Apple's manifest (no hardcoded values) ─────────────
   function loadTahoeIDs() {
@@ -37,7 +117,7 @@ function run() {
            "Make sure all 4 wallpapers are downloaded in System Settings → Wallpaper.";
   }
 
-  // ── Solar calculation (pure JS — no network, no python) ───────────────────
+  // ── Solar calculation (pure JS Math) ──────────────────────────────────────
   const now    = new Date();
   const N      = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
   const toRad  = d => d * Math.PI / 180;
@@ -89,7 +169,7 @@ function run() {
     catch(e) { return null; }
   }
 
-  // ── Update plist + restart agent via Python ────────────────────────────────
+  // ── Update wallpaper plist + restart agent ────────────────────────────────
   function updatePlist(newID) {
     const py = [
       "import sys,plistlib,subprocess,os",
@@ -112,7 +192,6 @@ function run() {
     ].join("\n");
     $(py).writeToFileAtomicallyEncodingError("/tmp/wp_update.py", true, $.NSUTF8StringEncoding, null);
     app.doShellScript("python3 /tmp/wp_update.py '" + PLIST + "' '" + newID + "'");
-    // launchctl kickstart is blocked by SIP — killall is the only working method
     try { app.doShellScript("killall WallpaperAgent"); } catch(_) {}
   }
 
@@ -135,6 +214,6 @@ function run() {
     const changes = [];
     if (wallpaperChanged) changes.push(`wallpaper→${period}`);
     if (darkChanged)      changes.push(`dark→${wantDark}`);
-    return `${hh}:${mm} | ${period} | ${sr}↑ ${ss}↓ | ${changes.join(' ')}`;
+    return `${hh}:${mm} | ${locLabel} | ${period} | ${sr}↑ ${ss}↓ | ${changes.join(' ')}`;
   }
 }
