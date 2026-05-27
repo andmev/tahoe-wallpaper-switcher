@@ -163,20 +163,46 @@ function run() {
   const wallpaperChanged = currentID !== desiredID;
   if (wallpaperChanged) updatePlist(desiredID);
 
-  const sysEvents  = Application("System Events");
+  const sysEvents   = Application("System Events");
   const currentDark = sysEvents.appearancePreferences.darkMode();
   const darkChanged = wantDark !== currentDark;
   if (darkChanged) sysEvents.appearancePreferences.darkMode = wantDark;
 
-  // ── Log ────────────────────────────────────────────────────────────────────
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const sr = `${Math.floor(sunrise)}:${String(Math.round((sunrise % 1) * 60)).padStart(2,'0')}`;
-  const ss = `${Math.floor(sunset)}:${String(Math.round((sunset  % 1) * 60)).padStart(2,'0')}`;
+  // ── Log: only on change, rotate daily ─────────────────────────────────────
+  const LOG = "/tmp/wallpaper-switch.log";
 
-  return [
-    `${hh}:${mm} | ${period} | sunrise=${sr} sunset=${ss}`,
-    `  wallpaper: ${wallpaperChanged ? `updated → ${period}` : "no change"}`,
-    `  dark mode: ${darkChanged      ? `updated → ${wantDark}` : "no change"}`,
-  ].join("\n");
+  // Delete log file if it is older than 24 h (keeps /tmp clean forever)
+  try {
+    app.doShellScript(
+      `find '${LOG}' -maxdepth 0 -mtime +0 -delete 2>/dev/null; true`
+    );
+  } catch(_) {}
+
+  // Write only when something actually changed
+  if (wallpaperChanged || darkChanged) {
+    const pad = n => String(n).padStart(2, '0');
+    const dt  = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const hh  = pad(now.getHours());
+    const mm  = pad(now.getMinutes());
+    const sr  = `${Math.floor(sunrise)}:${pad(Math.round((sunrise % 1) * 60))}`;
+    const ss  = `${Math.floor(sunset)}:${pad(Math.round((sunset  % 1) * 60))}`;
+
+    const changes = [];
+    if (wallpaperChanged) changes.push(`wallpaper→${period}`);
+    if (darkChanged)      changes.push(`dark→${wantDark}`);
+
+    const line =
+      `[${dt} ${hh}:${mm}] ${period} | sunrise=${sr} sunset=${ss} | ${changes.join(', ')}\n`;
+
+    const data = $(line).dataUsingEncoding($.NSUTF8StringEncoding);
+    const fh   = $.NSFileHandle.fileHandleForWritingAtPath($(LOG));
+    if (!fh.isNil()) {
+      fh.seekToEndOfFile;
+      fh.writeData(data);
+      fh.closeFile;
+    } else {
+      $.NSFileManager.defaultManager
+        .createFileAtPathContentsAttributes($(LOG), data, null);
+    }
+  }
 }

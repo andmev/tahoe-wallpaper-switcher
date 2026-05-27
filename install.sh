@@ -101,8 +101,6 @@ cat > "$AGENTS_DIR/$LABEL.plist" << EOF
     <true/>
     <key>StartInterval</key>
     <integer>900</integer>
-    <key>StandardOutPath</key>
-    <string>/tmp/wallpaper-switch.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/wallpaper-switch.err</string>
 </dict>
