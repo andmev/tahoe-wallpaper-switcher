@@ -1,0 +1,74 @@
+# Tahoe Wallpaper Switcher
+
+Automatically switches **Tahoe Morning / Day / Evening / Night** wallpapers based on real solar position for your location — and toggles **Dark / Light mode** accordingly.
+
+No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-installed on macOS).
+
+---
+
+## Install
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/install.sh)"
+```
+
+## Uninstall
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/uninstall.sh)"
+```
+
+---
+
+## Requirements
+
+- macOS Tahoe (26+)
+- All four wallpapers downloaded via **System Settings → Wallpaper**:
+  `Tahoe Morning`, `Tahoe Day`, `Tahoe Evening`, `Tahoe Night`
+
+---
+
+## How it works
+
+| Period | Wallpaper | Mode |
+|--------|-----------|------|
+| Sunrise → +1.5h | Tahoe Morning | ☀️ Light |
+| Morning → 1h before sunset | Tahoe Day | ☀️ Light |
+| 1h before sunset → +0.5h | Tahoe Evening | 🌙 Dark |
+| After sunset | Tahoe Night | 🌙 Dark |
+
+Sunrise and sunset are calculated daily using your coordinates — **no internet required**, no static schedule. Adapts automatically to every season.
+
+Wallpaper and dark mode are updated **only when the period actually changes** — no unnecessary flickering.
+
+---
+
+## Configure location
+
+Edit `~/Library/Scripts/wallpaper-switch.js` and change the two lines at the top:
+
+```js
+const LAT = 50.2649;  // ← your latitude
+const LON = 19.0238;  // ← your longitude
+```
+
+| City | LAT | LON |
+|------|-----|-----|
+| Katowice, Poland | 50.2649 | 19.0238 |
+| Warsaw, Poland | 52.2297 | 21.0122 |
+| London, UK | 51.5074 | -0.1278 |
+| New York, USA | 40.7128 | -74.0060 |
+| Tokyo, Japan | 35.6762 | 139.6503 |
+| Sydney, Australia | -33.8688 | 151.2093 |
+
+---
+
+## Why not standard macOS dynamic wallpaper?
+
+Apple ships `Tahoe Morning/Day/Evening/Night` as **video files** (`.mov`), not a single dynamic `.heic`. There is no public API to switch aerial/video wallpapers programmatically. This script works by reading wallpaper IDs directly from Apple's manifest (`entries.json`) and updating the wallpaper preference plist, then restarting the wallpaper agent.
+
+---
+
+## Tested on
+
+- macOS Tahoe 26.x, Apple Silicon
