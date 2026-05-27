@@ -9,13 +9,79 @@ function run() {
   const app = Application.currentApplication();
   app.includeStandardAdditions = true;
 
-  // ── Config ─────────────────────────────────────────────────────────────────
-  const LAT = 50.2649;   // Katowice, Poland  ← change to your location
-  const LON = 19.0238;
-
+  // ── Paths ──────────────────────────────────────────────────────────────────
   const home     = ObjC.unwrap($.NSHomeDirectory());
+  const CONFIG   = home + "/Library/Scripts/wallpaper-switch-config.json";
   const PLIST    = home + "/Library/Application Support/com.apple.wallpaper/Store/Index.plist";
   const MANIFEST = home + "/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json";
+
+  // ── Location ───────────────────────────────────────────────────────────────
+  // Reads config written by install.sh.
+  // Falls back to Katowice defaults if the config file is missing.
+  function loadConfig() {
+    const data = $.NSData.dataWithContentsOfFile($(CONFIG));
+    if (data.isNil()) return { useLocationServices: false, lat: 50.2649, lon: 19.0238 };
+    const str = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+    try { return JSON.parse(str); }
+    catch(e) { return { useLocationServices: false, lat: 50.2649, lon: 19.0238 }; }
+  }
+
+  // Persist updated coordinates (e.g. after travel detection)
+  function saveConfig(cfg) {
+    try {
+      const data = $(JSON.stringify(cfg, null, 2) + '\n').dataUsingEncoding($.NSUTF8StringEncoding);
+      data.writeToFileAtomically($(CONFIG), true);
+    } catch(e) {}
+  }
+
+  // Haversine distance in km — detects when user has traveled far enough
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Query macOS Location Services for the last known GPS fix (no delegate needed)
+  function getLocationFromCoreLocation() {
+    ObjC.import('CoreLocation');
+    try {
+      if (!$.CLLocationManager.locationServicesEnabled) return null;
+      const status = $.CLLocationManager.authorizationStatus;
+      if (status === 1 || status === 2) return null;   // restricted or denied
+      const mgr = $.CLLocationManager.alloc.init;
+      const loc = mgr.location;
+      if (!loc || loc.isNil()) return null;
+      const c = loc.coordinate;
+      if (Math.abs(c.latitude) < 0.001 && Math.abs(c.longitude) < 0.001) return null;
+      return { lat: c.latitude, lon: c.longitude };
+    } catch(e) { return null; }
+  }
+
+  const config = loadConfig();
+  let LAT = config.lat;
+  let LON = config.lon;
+  let locationUpdated = false;
+
+  if (config.useLocationServices) {
+    const loc = getLocationFromCoreLocation();
+    if (loc) {
+      const dist = haversineKm(config.lat, config.lon, loc.lat, loc.lon);
+      if (dist > 50) {
+        // User traveled — update cached coordinates so next run is instant
+        config.lat = loc.lat;
+        config.lon = loc.lon;
+        saveConfig(config);
+        locationUpdated = true;
+      }
+      LAT = loc.lat;
+      LON = loc.lon;
+    }
+    // If CoreLocation is unavailable, fall back to cached coordinates from config
+  }
 
   // ── Read Tahoe IDs from Apple's manifest (stays correct after re-downloads) ─
   function loadTahoeIDs() {
@@ -179,7 +245,7 @@ function run() {
   } catch(_) {}
 
   // Write only when something actually changed
-  if (wallpaperChanged || darkChanged) {
+  if (wallpaperChanged || darkChanged || locationUpdated) {
     const pad = n => String(n).padStart(2, '0');
     const dt  = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const hh  = pad(now.getHours());
@@ -188,8 +254,9 @@ function run() {
     const ss  = `${Math.floor(sunset)}:${pad(Math.round((sunset  % 1) * 60))}`;
 
     const changes = [];
-    if (wallpaperChanged) changes.push(`wallpaper→${period}`);
-    if (darkChanged)      changes.push(`dark→${wantDark}`);
+    if (wallpaperChanged)  changes.push(`wallpaper→${period}`);
+    if (darkChanged)       changes.push(`dark→${wantDark}`);
+    if (locationUpdated)   changes.push(`location→${LAT.toFixed(4)},${LON.toFixed(4)}`);
 
     const line =
       `[${dt} ${hh}:${mm}] ${period} | sunrise=${sr} sunset=${ss} | ${changes.join(', ')}\n`;

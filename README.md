@@ -39,17 +39,39 @@ No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-in
 
 Sunrise and sunset are calculated daily using your coordinates — **no internet required**, no static schedule. Adapts automatically to every season.
 
+If you choose **Location Services** during install, the script re-checks your GPS position on every run (every 15 min). Move further than 50 km — say, fly from San Francisco to London — and the schedule automatically recalibrates to the new timezone and solar position.
+
 Wallpaper and dark mode are updated **only when the period actually changes** — no unnecessary flickering.
 
 ---
 
 ## Configure location
 
-Edit `~/Library/Scripts/wallpaper-switch.js` and change the two lines at the top:
+During installation you choose how the script determines your location:
 
-```js
-const LAT = 50.2649;  // ← your latitude
-const LON = 19.0238;  // ← your longitude
+### Option 1 — Location Services (recommended)
+
+macOS detects your GPS position automatically.
+To enable it, grant Terminal (or your terminal app) access in:
+
+> **System Settings → Privacy & Security → Location Services**
+
+The script re-checks your position every 15 minutes. If you travel further than **50 km** (e.g. San Francisco → London), coordinates are updated automatically and the wallpaper schedule adapts to your new location — no manual action needed.
+
+### Option 2 — Manual coordinates
+
+Enter your latitude/longitude once during installation. To update later, edit:
+
+```
+~/Library/Scripts/wallpaper-switch-config.json
+```
+
+```json
+{
+  "useLocationServices": false,
+  "lat": 50.2649,
+  "lon": 19.0238
+}
 ```
 
 | City | LAT | LON |
