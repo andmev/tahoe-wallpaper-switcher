@@ -74,14 +74,33 @@ echo ""
 echo "  Sunrise/sunset times are calculated from your coordinates."
 echo "  Choose how the script should determine your location:"
 echo ""
-echo "  [1] Auto-detect  (recommended)"
-echo "      Your city is resolved from your IP address — no permissions"
-echo "      needed, works on first run. If you travel (San Francisco →"
-echo "      London), the schedule adapts automatically on the next run."
-echo ""
-echo "  [2] Manual coordinates"
-echo "      Enter latitude/longitude once. Update the config file"
-echo "      manually if you move."
+# Detect Mac hardware model to choose the better default
+HW_MODEL=$(sysctl -n hw.model 2>/dev/null)
+if echo "$HW_MODEL" | grep -qi '^MacBook'; then
+    IS_PORTABLE=true
+else
+    IS_PORTABLE=false
+fi
+
+if [ "$IS_PORTABLE" = "true" ]; then
+    echo "  [1] Auto-detect  (recommended)"
+    echo "      Your city is resolved from your IP address — no permissions"
+    echo "      needed, works on first run. If you travel (San Francisco →"
+    echo "      London), the schedule adapts automatically on the next run."
+    echo ""
+    echo "  [2] Manual coordinates"
+    echo "      Enter latitude/longitude once. Update the config file"
+    echo "      manually if you move."
+else
+    echo "  [1] Auto-detect"
+    echo "      Your city is resolved from your IP address — no permissions"
+    echo "      needed, works on first run."
+    echo ""
+    echo "  [2] Manual coordinates  (recommended)"
+    echo "      Enter latitude/longitude once. Update the config file"
+    echo "      manually if you move."
+    echo "      Find your coordinates at https://www.latlong.net"
+fi
 echo ""
 read -p "  Your choice [1/2]: " loc_choice
 echo ""
