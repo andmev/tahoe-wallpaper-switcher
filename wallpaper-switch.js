@@ -12,6 +12,7 @@ function run() {
   // ── Paths ──────────────────────────────────────────────────────────────────
   const home     = ObjC.unwrap($.NSHomeDirectory());
   const CONFIG   = home + "/Library/Scripts/wallpaper-switch-config.json";
+  const STATE    = home + "/Library/Scripts/wallpaper-switch-state.json";
   const PLIST    = home + "/Library/Application Support/com.apple.wallpaper/Store/Index.plist";
   const MANIFEST = home + "/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json";
 
@@ -80,30 +81,23 @@ function run() {
   const wantDark  = (period === "evening" || period === "night");
   const desiredID = IDS[period];
 
-  // ── Read current assetID via Python ────────────────────────────────────────
-  function getCurrentAssetID() {
-    const py = [
-      "import plistlib,subprocess",
-      "r=subprocess.run(['plutil','-convert','xml1','-o','-','" + PLIST + "'],capture_output=True)",
-      "d=plistlib.loads(r.stdout)",
-      "def f(x):",
-      "  if isinstance(x,dict):",
-      "    for c in x.get('Choices',[]):",
-      "      if isinstance(c,dict) and c.get('Provider')=='com.apple.wallpaper.choice.aerials' and c.get('Configuration'):",
-      "        return plistlib.loads(c['Configuration']).get('assetID','')",
-      "    for v in x.values():",
-      "      r=f(v)",
-      "      if r:return r",
-      "  elif isinstance(x,list):",
-      "    for v in x:",
-      "      r=f(v)",
-      "      if r:return r",
-      "  return ''",
-      "print(f(d))",
-    ].join("\n");
-    $(py).writeToFileAtomicallyEncodingError("/tmp/wp_read.py", true, $.NSUTF8StringEncoding, null);
-    try { return app.doShellScript("python3 /tmp/wp_read.py").trim() || null; }
-    catch(e) { return null; }
+  // ── State file: persist last-applied period so we skip no-op runs ──────────
+  // (The plist-based assetID read is unreliable: macOS stores Provider='default'
+  //  after WallpaperAgent restarts, so it never matches 'aerials' and the old
+  //  guard always returned null → always triggered a reload every 15 min.)
+  function readState() {
+    try {
+      const data = $.NSData.dataWithContentsOfFile($(STATE));
+      if (data.isNil()) return {};
+      const str = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+      return JSON.parse(str);
+    } catch(e) { return {}; }
+  }
+
+  function writeState(s) {
+    $(JSON.stringify(s)).writeToFileAtomicallyEncodingError(
+      STATE, true, $.NSUTF8StringEncoding, null
+    );
   }
 
   // ── Update wallpaper plist + restart agent ────────────────────────────────
@@ -133,14 +127,22 @@ function run() {
   }
 
   // ── Apply only if something actually changed ───────────────────────────────
-  const currentID = getCurrentAssetID();
-  const wallpaperChanged = currentID !== desiredID;
-  if (wallpaperChanged) updatePlist(desiredID);
+  const state            = readState();
+  const wallpaperChanged = state.period !== period || state.desiredID !== desiredID;
 
+  // Dark-mode: read live from System Events (always reliable)
   const sysEvents   = Application("System Events");
   const currentDark = sysEvents.appearancePreferences.darkMode();
   const darkChanged = wantDark !== currentDark;
-  if (darkChanged) sysEvents.appearancePreferences.darkMode = wantDark;
+
+  // Nothing to do — exit silently without touching WallpaperAgent
+  if (!wallpaperChanged && !darkChanged) return;
+
+  if (wallpaperChanged) updatePlist(desiredID);
+  if (darkChanged)      sysEvents.appearancePreferences.darkMode = wantDark;
+
+  // Persist applied state so next run can skip if period hasn't changed
+  if (wallpaperChanged) writeState({ period, desiredID });
 
   // ── Log (only on change) ───────────────────────────────────────────────────
   if (wallpaperChanged || darkChanged) {
