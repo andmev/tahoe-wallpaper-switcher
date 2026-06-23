@@ -65,140 +65,19 @@ if [ "$MISSING" = "1" ]; then
     exit 1
 fi
 
-# ── Configure location ────────────────────────────────────────────────────
+# ── Location config ──────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Location Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Sunrise/sunset times are calculated from your coordinates."
-echo "  Choose how the script should determine your location:"
+echo "  A config file with Apple Park defaults will be created at:"
 echo ""
-# Detect Mac hardware model to choose the better default
-HW_MODEL=$(sysctl -n hw.model 2>/dev/null)
-if echo "$HW_MODEL" | grep -qi '^MacBook'; then
-    IS_PORTABLE=true
-else
-    IS_PORTABLE=false
-fi
-
-if [ "$IS_PORTABLE" = "true" ]; then
-    echo "  [1] Auto-detect  (recommended)"
-    echo "      Your city is resolved from your IP address — no permissions"
-    echo "      needed, works on first run. If you travel (San Francisco →"
-    echo "      London), the schedule adapts automatically on the next run."
-    echo ""
-    echo "  [2] Manual coordinates"
-    echo "      Enter latitude/longitude once. Update the config file"
-    echo "      manually if you move."
-else
-    echo "  [1] Auto-detect"
-    echo "      Your city is resolved from your IP address — no permissions"
-    echo "      needed, works on first run."
-    echo ""
-    echo "  [2] Manual coordinates  (recommended)"
-    echo "      Enter latitude/longitude once. Update the config file"
-    echo "      manually if you move."
-    echo "      Find your coordinates at https://www.latlong.net"
-fi
+echo "    $SCRIPTS_DIR/wallpaper-switch-config.json"
 echo ""
-read -p "  Your choice [1/2]: " loc_choice
-echo ""
-
-# Helper: resolve location from IP — tries three providers, stops at first success
-get_ip_location() {
-    local TMP result
-    TMP=$(mktemp /tmp/tahoe_geo.XXXXXX) || { echo '{"error":"mktemp"}'; return; }
-    result=''
-
-    # 1. ipinfo.io  → {"loc":"lat,lon","city":"...","country":"CC"}  (50k/month free)
-    if [ -z "$result" ] && curl -sSL --max-time 5 "https://ipinfo.io/json" -o "$TMP" 2>/dev/null; then
-        result=$(python3 -c "
-import json
-try:
-    d=json.load(open('$TMP'))
-    loc=d.get('loc','')
-    if ',' in loc and not d.get('bogon'):
-        a,b=loc.split(',',1)
-        print(json.dumps({'latitude':float(a),'longitude':float(b),'city':d.get('city',''),'country_name':d.get('country','')}))
-except: pass
-" 2>/dev/null || true)
-    fi
-
-    # 2. ipapi.co   → {"latitude":N,"longitude":N,"city":"...","country_name":"..."}  (1k/day free)
-    if [ -z "$result" ] && curl -sSL --max-time 5 "https://ipapi.co/json/" -o "$TMP" 2>/dev/null; then
-        result=$(python3 -c "
-import json
-try:
-    d=json.load(open('$TMP'))
-    if not d.get('error') and 'latitude' in d:
-        print(json.dumps({'latitude':float(d['latitude']),'longitude':float(d['longitude']),'city':d.get('city',''),'country_name':d.get('country_name','')}))
-except: pass
-" 2>/dev/null || true)
-    fi
-
-    # 3. ip-api.com → {"lat":N,"lon":N,"city":"...","country":"..."}  (45 req/min, free)
-    if [ -z "$result" ] && curl -sSL --max-time 5 "http://ip-api.com/json?fields=lat,lon,city,country" -o "$TMP" 2>/dev/null; then
-        result=$(python3 -c "
-import json
-try:
-    d=json.load(open('$TMP'))
-    if d.get('lat') and d.get('lon'):
-        print(json.dumps({'latitude':float(d['lat']),'longitude':float(d['lon']),'city':d.get('city',''),'country_name':d.get('country','')}))
-except: pass
-" 2>/dev/null || true)
-    fi
-
-    rm -f "$TMP"
-    if [ -n "$result" ]; then echo "$result"; else echo '{"error":"no_internet"}'; fi
-}
-
-# Helper: extract one field from a JSON string via Python (always exits 0)
-json_field() {
-    local field="$1"
-    python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('$field', ''))
-except:
-    pass
-" 2>/dev/null
-}
-
-USE_LOCATION_SERVICES="false"
-FINAL_LAT=""
-FINAL_LON=""
-
-if [[ "$loc_choice" == "1" ]]; then
-    echo "  Detecting your location..."
-    LOC_JSON=$(get_ip_location)
-    LOC_LAT=$(echo "$LOC_JSON" | json_field latitude)
-    LOC_LON=$(echo "$LOC_JSON" | json_field longitude)
-    LOC_CITY=$(echo "$LOC_JSON" | json_field city)
-    LOC_COUNTRY=$(echo "$LOC_JSON" | json_field country_name)
-
-    if [ -n "$LOC_LAT" ] && [ -n "$LOC_LON" ]; then
-        echo "  ✓ Detected: $LOC_CITY, $LOC_COUNTRY  ($LOC_LAT, $LOC_LON)"
-        USE_LOCATION_SERVICES="true"
-        FINAL_LAT="$LOC_LAT"
-        FINAL_LON="$LOC_LON"
-    else
-        echo ""
-        echo "  ⚠️  Could not detect location (no internet or service unavailable)."
-        echo "      Falling back to manual coordinates."
-    fi
-fi
-
-# Manual entry — chosen directly or as fallback
-if [ -z "$FINAL_LAT" ] || [ -z "$FINAL_LON" ]; then
-    echo "  Enter your coordinates:"
-    echo "  (Look up yours at https://www.latlong.net )"
-    echo ""
-    read -p "  Latitude  (e.g.  50.2649 for Katowice): " FINAL_LAT
-    read -p "  Longitude (e.g.  19.0238 for Katowice): " FINAL_LON
-    USE_LOCATION_SERVICES="false"
-fi
+echo "  To set your own location, edit that file and update lat/lon."
+echo "  Find your coordinates at: https://www.latlong.net"
 echo ""
 
 # ── Download & install script ────────────────────────────────────────────────
@@ -216,15 +95,18 @@ fi
 chmod +x "$SCRIPTS_DIR/wallpaper-switch.js"
 echo "  ✓ Script → $SCRIPTS_DIR/wallpaper-switch.js"
 
-# Write location config (read by wallpaper-switch.js on every run)
-cat > "$SCRIPTS_DIR/wallpaper-switch-config.json" << JSONCFG
+# Write location config — defaults to Apple Park, Cupertino CA (preserve on reinstall)
+if [ ! -f "$SCRIPTS_DIR/wallpaper-switch-config.json" ]; then
+    cat > "$SCRIPTS_DIR/wallpaper-switch-config.json" << 'JSONCFG'
 {
-  "useLocationServices": $USE_LOCATION_SERVICES,
-  "lat": $FINAL_LAT,
-  "lon": $FINAL_LON
+  "lat": 37.3349,
+  "lon": -122.0090
 }
 JSONCFG
-echo "  ✓ Config  → $SCRIPTS_DIR/wallpaper-switch-config.json"
+    echo "  ✓ Config  → $SCRIPTS_DIR/wallpaper-switch-config.json  (Apple Park defaults)"
+else
+    echo "  ✓ Config  → $SCRIPTS_DIR/wallpaper-switch-config.json  (existing, preserved)"
+fi
 
 # ── Install launchd agent ────────────────────────────────────────────────────
 mkdir -p "$AGENTS_DIR"
