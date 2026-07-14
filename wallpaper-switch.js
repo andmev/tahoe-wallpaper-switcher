@@ -1,7 +1,8 @@
 #!/usr/bin/env osascript -l JavaScript
 // wallpaper-switch.js — Tahoe wallpaper switcher based on solar position
 // Location is read from ~/Library/Scripts/wallpaper-switch-config.json.
-// Only updates wallpaper / dark mode when a change is actually needed.
+// Only updates the wallpaper when the solar period actually changes.
+// macOS Appearance is left exactly as the user configured it.
 
 ObjC.import('Foundation');
 
@@ -78,7 +79,6 @@ function run() {
   else if (h < sunset  + 0.5)    period = "evening";
   else                            period = "night";
 
-  const wantDark  = (period === "evening" || period === "night");
   const desiredID = IDS[period];
 
   // ── State file: persist last-applied period so we skip no-op runs ──────────
@@ -131,29 +131,22 @@ function run() {
   const state            = readState();
   const wallpaperChanged = state.period !== period || state.desiredID !== desiredID;
 
-  // Dark-mode: read live from System Events (always reliable)
-  const sysEvents   = Application("System Events");
-  const currentDark = sysEvents.appearancePreferences.darkMode();
-  const darkChanged = wantDark !== currentDark;
-
   // Nothing to do — exit silently without touching WallpaperAgent
-  if (!wallpaperChanged && !darkChanged) return;
+  if (!wallpaperChanged) return;
 
   if (wallpaperChanged) updatePlist(desiredID);
-  if (darkChanged)      sysEvents.appearancePreferences.darkMode = wantDark;
 
   // Persist applied state so next run can skip if period hasn't changed
   if (wallpaperChanged) writeState({ period, desiredID });
 
   // ── Log (only on change) ───────────────────────────────────────────────────
-  if (wallpaperChanged || darkChanged) {
+  if (wallpaperChanged) {
     const pad = n => String(n).padStart(2, '0');
     const hh  = pad(now.getHours()), mm = pad(now.getMinutes());
     const sr  = `${Math.floor(sunrise)}:${pad(Math.round((sunrise%1)*60))}`;
     const ss  = `${Math.floor(sunset)}:${pad(Math.round((sunset%1)*60))}`;
     const changes = [];
     if (wallpaperChanged) changes.push(`wallpaper→${period}`);
-    if (darkChanged)      changes.push(`dark→${wantDark}`);
     return `${hh}:${mm} | ${locLabel} | ${period} | ${sr}↑ ${ss}↓ | ${changes.join(' ')}`;
   }
 }
