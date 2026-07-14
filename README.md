@@ -1,6 +1,8 @@
 # Tahoe Wallpaper Switcher
 
-Automatically switches **Tahoe Morning / Day / Evening / Night** wallpapers based on real solar position for your location — and toggles **Dark / Light mode** accordingly.
+Automatically switches **Tahoe Morning / Day / Evening / Night** wallpapers based on real solar position for your location. Your macOS **Appearance** setting is never changed.
+
+> This is the `preserve-appearance` branch. It changes wallpapers only; use the `main` branch if you also want the script to switch Light/Dark Mode.
 
 No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-installed on macOS).
 
@@ -9,7 +11,7 @@ No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-in
 ## Install
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/preserve-appearance/install.sh)"
 ```
 
 ## Uninstall
@@ -30,16 +32,16 @@ No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-in
 
 ## How it works
 
-| Period | Wallpaper | Mode |
-|--------|-----------|------|
-| Sunrise → +1.5 h | Tahoe Morning | ☀️ Light |
-| Morning → 1 h before sunset | Tahoe Day | ☀️ Light |
-| 1 h before sunset → +0.5 h | Tahoe Evening | 🌙 Dark |
-| After sunset | Tahoe Night | 🌙 Dark |
+| Period | Wallpaper |
+|--------|-----------|
+| Sunrise → +1.5 h | Tahoe Morning |
+| Morning → 1 h before sunset | Tahoe Day |
+| 1 h before sunset → +0.5 h | Tahoe Evening |
+| After sunset | Tahoe Night |
 
 Sunrise and sunset are calculated daily using your coordinates — **no internet required**, no static schedule. Adapts automatically to every season.
 
-Wallpaper and dark mode are updated **only when the period actually changes** — no unnecessary flickering.
+The wallpaper is updated **only when the period actually changes** — no unnecessary flickering. macOS Appearance remains under your control.
 
 ---
 
@@ -90,7 +92,7 @@ Open **System Settings → Wallpaper** and download:
 mkdir -p ~/Library/Scripts
 
 curl -fsSL \
-  https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/wallpaper-switch.js \
+  https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/preserve-appearance/wallpaper-switch.js \
   -o ~/Library/Scripts/wallpaper-switch.js
 
 chmod +x ~/Library/Scripts/wallpaper-switch.js

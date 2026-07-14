@@ -4,7 +4,7 @@
 #   local install: bash install.sh
 set -e
 
-RAW="https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main"
+RAW="https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/preserve-appearance"
 SCRIPTS_DIR="$HOME/Library/Scripts"
 AGENTS_DIR="$HOME/Library/LaunchAgents"
 LABEL="com.user.wallpaper-switch"
