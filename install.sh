@@ -30,14 +30,61 @@ if [ ! -f "$MANIFEST" ]; then
     exit 1
 fi
 
-eval "$(python3 - "$MANIFEST" << 'PY'
-import json, sys
-for a in json.load(open(sys.argv[1])).get('assets', []):
-    if a.get('accessibilityLabel') in ["Tahoe Morning","Tahoe Day","Tahoe Evening","Tahoe Night"]:
-        key = a['accessibilityLabel'].upper().replace(' ', '_')
-        print(f"TAHOE_ID_{key}='{a['id']}'")
+if ! TAHOE_IDS=$(python3 - "$MANIFEST" "$VIDEOS" << 'PY'
+import json, os, sys
+
+manifest_path, videos_dir = sys.argv[1:]
+period_aliases = {
+    "MORNING": {"morning", "sunrise", "dawn"},
+    "DAY": {"day"},
+    "EVENING": {"evening", "sunset", "dusk"},
+    "NIGHT": {"night"},
+}
+
+def normalized(value):
+    return " ".join(str(value or "").lower().replace("_", " ").replace("-", " ").split())
+
+def period_for(asset):
+    label = normalized(asset.get("accessibilityLabel"))
+    for period in period_aliases:
+        if label == "tahoe " + period.lower():
+            return period
+
+    names = " ".join(normalized(asset.get(key)) for key in
+                      ("accessibilityLabel", "localizedNameKey", "name", "title"))
+    if "tahoe" not in names:
+        return None
+
+    time_of_day = normalized(asset.get("timeOfDay"))
+    for period, aliases in period_aliases.items():
+        if time_of_day in aliases:
+            return period
+
+    # Fallback for manifests that omit timeOfDay but retain an English key.
+    for period, aliases in period_aliases.items():
+        if any(" " + alias in " " + names for alias in aliases):
+            return period
+    return None
+
+def is_downloaded(asset_id):
+    return any(os.path.isfile(os.path.join(videos_dir, asset_id + ext))
+               for ext in (".mov", ".mp4", ".m4v"))
+
+with open(manifest_path, encoding="utf-8") as manifest_file:
+    assets = json.load(manifest_file).get("assets", [])
+
+for period in period_aliases:
+    candidates = [asset for asset in assets if period_for(asset) == period]
+    # Prefer the cached asset when the manifest contains duplicate/localized entries.
+    selected = next((asset for asset in candidates if is_downloaded(asset.get("id", ""))),
+                    candidates[0] if candidates else None)
+    print(selected.get("id", "") if selected else "-", end=" ")
 PY
-)"
+); then
+    echo "ERROR: Could not read wallpaper manifest."
+    exit 1
+fi
+read -r TAHOE_ID_MORNING TAHOE_ID_DAY TAHOE_ID_EVENING TAHOE_ID_NIGHT <<< "$TAHOE_IDS"
 
 echo ""
 echo "Checking wallpapers..."
@@ -45,10 +92,10 @@ MISSING=0
 for NAME in "Tahoe Morning" "Tahoe Day" "Tahoe Evening" "Tahoe Night"; do
     KEY="TAHOE_ID_$(echo "$NAME" | tr '[:lower:] ' '[:upper:]_')"
     ID="${!KEY}"
-    if [ -z "$ID" ]; then
+    if [ -z "$ID" ] || [ "$ID" = "-" ]; then
         echo "  ✗ $NAME — not found in manifest"
         MISSING=1
-    elif [ -f "$VIDEOS/$ID.mov" ]; then
+    elif [ -f "$VIDEOS/$ID.mov" ] || [ -f "$VIDEOS/$ID.mp4" ] || [ -f "$VIDEOS/$ID.m4v" ]; then
         echo "  ✓ $NAME"
     else
         echo "  ✗ $NAME — NOT downloaded"
