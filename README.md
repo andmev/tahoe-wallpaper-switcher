@@ -2,20 +2,20 @@
 
 Automatically switches **Tahoe Morning / Day / Evening / Night** wallpapers based on real solar position for your location — and toggles **Dark / Light mode** accordingly.
 
-No third-party apps. Pure JXA (JavaScript for Automation) + python3 (both pre-installed on macOS).
+No third-party apps. Pure JXA (JavaScript for Automation) + python3. JXA is pre-installed on macOS; install Python via Xcode Command Line Tools or another compatible distribution if it is unavailable.
 
 ---
 
 ## Install
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/31c7eea079bbb46ee098b5dab2b804c77ea88684/install.sh)"
 ```
 
 ## Uninstall
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/uninstall.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/31c7eea079bbb46ee098b5dab2b804c77ea88684/uninstall.sh)"
 ```
 
 ---
@@ -135,6 +135,8 @@ cat > ~/Library/LaunchAgents/com.user.wallpaper-switch.plist << EOF
     <true/>
     <key>StartInterval</key>
     <integer>900</integer>
+    <key>StandardOutputPath</key>
+    <string>/tmp/wallpaper-switch.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/wallpaper-switch.err</string>
 </dict>
@@ -159,6 +161,7 @@ launchctl unload ~/Library/LaunchAgents/com.user.wallpaper-switch.plist
 rm ~/Library/LaunchAgents/com.user.wallpaper-switch.plist
 rm ~/Library/Scripts/wallpaper-switch.js
 rm ~/Library/Scripts/wallpaper-switch-config.json
+rm -f ~/Library/Scripts/wallpaper-switch-state.json
 ```
 
 ---

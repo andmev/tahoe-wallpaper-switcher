@@ -4,20 +4,20 @@
 
 Cambia automáticamente los fondos de pantalla **Tahoe Morning / Day / Evening / Night** según la posición real del sol para tu ubicación — y alterna el **modo Oscuro / Claro** en consecuencia.
 
-Sin aplicaciones de terceros. Solo JXA (JavaScript for Automation) + python3 (ambos preinstalados en macOS).
+Sin aplicaciones de terceros. Solo JXA (JavaScript for Automation) + python3. JXA viene preinstalado en macOS; instala Python mediante Xcode Command Line Tools u otra distribución compatible si no está disponible.
 
 ---
 
 ## Instalación
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/31c7eea079bbb46ee098b5dab2b804c77ea88684/install.sh)"
 ```
 
 ## Desinstalación
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/uninstall.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/31c7eea079bbb46ee098b5dab2b804c77ea88684/uninstall.sh)"
 ```
 
 ---
@@ -35,13 +35,13 @@ Sin aplicaciones de terceros. Solo JXA (JavaScript for Automation) + python3 (am
 | Período | Fondo de pantalla | Modo |
 |--------|-----------|------|
 | Amanecer → +1.5 h | Tahoe Morning | ☀️ Claro |
-| Mañana → 1 h antes del atardecer | Tahoe Day | ☀️ Claro |
+| Día → 1 h antes del atardecer | Tahoe Day | ☀️ Claro |
 | 1 h antes del atardecer → +0.5 h | Tahoe Evening | 🌙 Oscuro |
 | Tras el atardecer | Tahoe Night | 🌙 Oscuro |
 
 El amanecer y el atardecer se calculan diariamente con tus coordenadas: **no requiere conexión a Internet**, ni horario estático. Se adapta automáticamente a cada estación.
 
-El fondo de pantalla y el modo oscuro se actualizan **solo cuando el período cambia realmente**: sin parpadeos innecesarios.
+El fondo de pantalla se actualiza **solo cuando cambia el período o el identificador del fondo deseado**, y el modo oscuro se evalúa y actualiza de forma independiente: sin parpadeos innecesarios.
 
 ---
 
@@ -49,7 +49,7 @@ El fondo de pantalla y el modo oscuro se actualizan **solo cuando el período ca
 
 Tus coordenadas se almacenan en un único archivo JSON:
 
-```
+```text
 ~/Library/Scripts/wallpaper-switch-config.json
 ```
 
@@ -92,7 +92,7 @@ Abre **Ajustes del sistema → Fondo de pantalla** y descarga:
 mkdir -p ~/Library/Scripts
 
 curl -fsSL \
-  https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/main/wallpaper-switch.js \
+  https://raw.githubusercontent.com/andmev/tahoe-wallpaper-switcher/31c7eea079bbb46ee098b5dab2b804c77ea88684/wallpaper-switch.js \
   -o ~/Library/Scripts/wallpaper-switch.js
 
 chmod +x ~/Library/Scripts/wallpaper-switch.js
@@ -137,6 +137,8 @@ cat > ~/Library/LaunchAgents/com.user.wallpaper-switch.plist << EOF
     <true/>
     <key>StartInterval</key>
     <integer>900</integer>
+    <key>StandardOutputPath</key>
+    <string>/tmp/wallpaper-switch.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/wallpaper-switch.err</string>
 </dict>
@@ -161,6 +163,7 @@ launchctl unload ~/Library/LaunchAgents/com.user.wallpaper-switch.plist
 rm ~/Library/LaunchAgents/com.user.wallpaper-switch.plist
 rm ~/Library/Scripts/wallpaper-switch.js
 rm ~/Library/Scripts/wallpaper-switch-config.json
+rm -f ~/Library/Scripts/wallpaper-switch-state.json
 ```
 
 ---

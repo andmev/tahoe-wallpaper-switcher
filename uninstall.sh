@@ -16,6 +16,7 @@ launchctl unload "$AGENTS_DIR/$LABEL.plist" 2>/dev/null \
 rm -f "$AGENTS_DIR/$LABEL.plist"                     && echo "  ✓ $AGENTS_DIR/$LABEL.plist"
 rm -f "$SCRIPTS_DIR/wallpaper-switch.js"             && echo "  ✓ $SCRIPTS_DIR/wallpaper-switch.js"
 rm -f "$SCRIPTS_DIR/wallpaper-switch-config.json"    && echo "  ✓ $SCRIPTS_DIR/wallpaper-switch-config.json"
+rm -f "$SCRIPTS_DIR/wallpaper-switch-state.json"     && echo "  ✓ $SCRIPTS_DIR/wallpaper-switch-state.json"
 rm -f /tmp/wallpaper-switch.log                      && echo "  ✓ /tmp/wallpaper-switch.log"
 rm -f /tmp/wallpaper-switch.err                      && echo "  ✓ /tmp/wallpaper-switch.err"
 rm -f /tmp/wp_update.py                              && echo "  ✓ /tmp/wp_update.py"
