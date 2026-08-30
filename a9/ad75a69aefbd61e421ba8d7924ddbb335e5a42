@@ -1,0 +1,18 @@
+README.es-ES.md
+  h_aee71642b092fc 7,14,20,38,44,52,95,140-141,166
+README.md
+  h_aee71642b092fc 5,12,18,138-139,164
+uninstall.sh
+  h_aee71642b092fc 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a9ad75a69aefbd61e421ba8d7924ddbb335e5a42",
+  "prompts": {},
+  "humans": {
+    "h_aee71642b092fc": {
+      "author": "Andrii Medvediev <a.medvedev@me.com>"
+    }
+  }
+}
