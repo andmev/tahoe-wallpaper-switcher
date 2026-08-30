@@ -15,6 +15,7 @@ function run() {
   const STATE    = home + "/Library/Scripts/wallpaper-switch-state.json";
   const PLIST    = home + "/Library/Application Support/com.apple.wallpaper/Store/Index.plist";
   const MANIFEST = home + "/Library/Application Support/com.apple.wallpaper/aerials/manifest/entries.json";
+  const VIDEOS   = home + "/Library/Application Support/com.apple.wallpaper/aerials/videos";
 
   // ── Config ────────────────────────────────────────────────────────────────
   function readConfig() {
@@ -38,14 +39,54 @@ function run() {
   // ── Read Tahoe IDs from Apple's manifest (no hardcoded values) ─────────────
   function loadTahoeIDs() {
     try {
-      const raw = app.doShellScript(
-        "python3 -c \"import json; d=json.load(open('" + MANIFEST + "')); " +
-        "print(' '.join(a['id'] for n in ['Tahoe Morning','Tahoe Day','Tahoe Evening','Tahoe Night'] " +
-        "for a in d['assets'] if a.get('accessibilityLabel')==n))\""
+      const data = $.NSData.dataWithContentsOfFile($(MANIFEST));
+      if (data.isNil()) return null;
+      const str = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding));
+      const assets = JSON.parse(str).assets || [];
+      const aliases = {
+        morning: ["morning", "sunrise", "dawn"],
+        day: ["day"],
+        evening: ["evening", "sunset", "dusk"],
+        night: ["night"]
+      };
+      const normalize = value => String(value || "").toLowerCase()
+        .replace(/[_-]/g, " ").replace(/\s+/g, " ").trim();
+      const isDownloaded = id => [".mov", ".mp4", ".m4v"].some(ext =>
+        $.NSFileManager.defaultManager.fileExistsAtPath($(VIDEOS + "/" + id + ext))
       );
-      const parts = raw.trim().split(' ');
-      if (parts.length !== 4) return null;
-      return { morning: parts[0], day: parts[1], evening: parts[2], night: parts[3] };
+      const periodFor = asset => {
+        const label = normalize(asset.accessibilityLabel);
+        for (const period of Object.keys(aliases)) {
+          if (label === "tahoe " + period) return period;
+        }
+
+        const names = [asset.accessibilityLabel, asset.localizedNameKey,
+          asset.name, asset.title].map(normalize).join(" ");
+        if (!names.includes("tahoe")) return null;
+
+        const timeOfDay = normalize(asset.timeOfDay);
+        for (const period of Object.keys(aliases)) {
+          if (aliases[period].includes(timeOfDay)) return period;
+        }
+
+        // Fallback for manifests that omit timeOfDay but retain an English key.
+        for (const period of Object.keys(aliases)) {
+          if (aliases[period].some(alias => names.includes(" " + alias))) return period;
+        }
+        return null;
+      };
+      const resolve = period => {
+        const candidates = assets.filter(asset => periodFor(asset) === period);
+        const local = candidates.find(asset => isDownloaded(asset.id));
+        return (local || candidates[0] || {}).id;
+      };
+      const ids = {
+        morning: resolve("morning"),
+        day: resolve("day"),
+        evening: resolve("evening"),
+        night: resolve("night")
+      };
+      return ids.morning && ids.day && ids.evening && ids.night ? ids : null;
     } catch(e) { return null; }
   }
 
