@@ -1,0 +1,16 @@
+install.sh
+  h_aee71642b092fc 33-81,83-87,95,98
+wallpaper-switch.js
+  h_aee71642b092fc 18,42-55,57-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b698f86b5ecd1661a5f1c9c7d6f7101fa107415a",
+  "prompts": {},
+  "humans": {
+    "h_aee71642b092fc": {
+      "author": "Andrii Medvediev <a.medvedev@me.com>"
+    }
+  }
+}
