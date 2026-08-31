@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: false
 
       - name: Check wallpaper script syntax
         run: node --check wallpaper-switch.js
