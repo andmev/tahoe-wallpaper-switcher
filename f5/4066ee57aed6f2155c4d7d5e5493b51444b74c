@@ -1,0 +1,14 @@
+.github/workflows/ci.yml
+  h_aee71642b092fc 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f54066ee57aed6f2155c4d7d5e5493b51444b74c",
+  "prompts": {},
+  "humans": {
+    "h_aee71642b092fc": {
+      "author": "Andrii Medvediev <a.medvedev@me.com>"
+    }
+  }
+}
