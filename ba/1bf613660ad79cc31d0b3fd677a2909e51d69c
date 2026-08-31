@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_b5391721f584d9::t_4fec3e7420bcc7 16-17,32-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ba1bf613660ad79cc31d0b3fd677a2909e51d69c",
+  "prompts": {},
+  "sessions": {
+    "s_b5391721f584d9": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_fa81c4fc2ffemSV23N1ktjboTU",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Andrii Medvediev <a.medvedev@me.com>"
+    }
+  }
+}
