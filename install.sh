@@ -90,8 +90,12 @@ echo ""
 echo "Checking wallpapers..."
 MISSING=0
 for NAME in "Tahoe Morning" "Tahoe Day" "Tahoe Evening" "Tahoe Night"; do
-    KEY="TAHOE_ID_$(echo "$NAME" | tr '[:lower:] ' '[:upper:]_')"
-    ID="${!KEY}"
+    case "$NAME" in
+        "Tahoe Morning") ID="$TAHOE_ID_MORNING" ;;
+        "Tahoe Day")     ID="$TAHOE_ID_DAY" ;;
+        "Tahoe Evening") ID="$TAHOE_ID_EVENING" ;;
+        "Tahoe Night")   ID="$TAHOE_ID_NIGHT" ;;
+    esac
     if [ -z "$ID" ] || [ "$ID" = "-" ]; then
         echo "  ✗ $NAME — not found in manifest"
         MISSING=1
