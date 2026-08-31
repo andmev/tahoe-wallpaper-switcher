@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts
+        run: |
+          bash -n install.sh
+          bash -n uninstall.sh
+
+      - name: Check JavaScript
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: false
+
+      - name: Check wallpaper script syntax
+        run: node --check wallpaper-switch.js
+
+      - name: Check diff whitespace
+        run: git diff --check HEAD^ HEAD
