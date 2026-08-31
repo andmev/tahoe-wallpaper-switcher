@@ -1,0 +1,14 @@
+install.sh
+  h_aee71642b092fc 93-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "211b0792d8bd89e92dc5a58f1c29be704ffc89d4",
+  "prompts": {},
+  "humans": {
+    "h_aee71642b092fc": {
+      "author": "Andrii Medvediev <a.medvedev@me.com>"
+    }
+  }
+}
