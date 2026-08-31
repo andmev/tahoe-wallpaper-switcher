@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check shell scripts
         run: |
@@ -27,5 +29,5 @@ jobs:
       - name: Check wallpaper script syntax
         run: node --check wallpaper-switch.js
 
-      - name: Check diff whitespace
-        run: git diff --check HEAD^ HEAD
+      - name: Check whitespace
+        run: git diff --check
